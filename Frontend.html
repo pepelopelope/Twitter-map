@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa de tweets</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        // Conecta a Kinesis para recibir los tweets
+        var kinesis = new AWS.Kinesis({region: 'NOMBRE_DE_TU_REGION'});
+        kinesis.describeStream({StreamName: 'NOMBRE_DE_TU_STREAM'}, function(err, data) {
+            if (err) console.log(err, err.stack);
+            else {
+                // Obtiene los shards del stream
+                var shards = data.StreamDescription.Shards;
+                // Itera sobre los shards
+                for (var i = 0; i < shards.length; i++) {
+                    var shard = shards[i];
+                    // Obtiene los registros del shard
+                    var params = {
+                        ShardIteratorType: 'LATEST',
+                        ShardId: shard.ShardId,
+                        StreamName: 'NOMBRE_DE_TU_STREAM'
+                    };
+                    kinesis.getShardIterator(params, function(err, data) {
+                        if (err) console.log(err, err.stack);
+                        else {
+                            // Itera sobre los registros del shard
+                            var shardIterator = data.ShardIterator;
+                            setInterval(function() {
+                                kinesis.getRecords({ShardIterator: shardIterator}, function(err, data) {
+                                    if (err) console.log(err, err.stack);
+                                    else {
+                                        // Itera sobre los registros
+                                        for (var j = 0; j < data.Records.length; j++) {
+                                            var record = data.Records[j];
+                                            // Convierte la cadena JSON en un objeto JavaScript
+                                            var tweet = JSON.parse(record.Data);
+                                            // Crea un marcador en el mapa para cada tweet con coordenadas
+                                            if (tweet.coordinates) {
+                                                var marker = L.marker([tweet.coordinates[1], tweet.coordinates[0]]).addTo(map);
+                                                marker.bindPopup(tweet.text);
+                                            }
+                                        }
+                                        // Actualiza el iterador del shard para obtener nuevos registros
+                                        shardIterator = data.NextShardIterator;
+                                    }
+                                });
+                            }, 5000); // Intervalo de 5 segundos para actualizar los registros
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.106.0.min.js"></script>
+</body>
+</html>
