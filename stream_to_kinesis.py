@@ -1,6 +1,6 @@
-import tweepy
-import json
 import boto3
+import json
+import tweepy
 from datetime import datetime
 
 # Variables de autenticación de Twitter
@@ -9,15 +9,13 @@ consumer_secret = 'TU_CONSUMER_SECRET'
 access_token = 'TU_ACCESS_TOKEN'
 access_token_secret = 'TU_ACCESS_TOKEN_SECRET'
 
+# Variables de configuración de Kinesis
+stream_name = 'NOMBRE_DE_TU_STREAM'
+region_name = 'NOMBRE_DE_TU_REGION'
+partition_key = 'PARTITION_KEY'
+
 # Palabra clave o hashtag para seguir
 hashtag = "#TUCERTAINHASHTAG"
-
-# Variables de autenticación de Kinesis
-region_name = 'TU_REGION_NAME'
-stream_name = 'TU_NOMBRE_DE_STREAM'
-
-# Crea una instancia de Kinesis
-kinesis = boto3.client('kinesis', region_name=region_name)
 
 # Clase StreamListener
 class StreamListener(tweepy.StreamListener):
@@ -40,10 +38,16 @@ class StreamListener(tweepy.StreamListener):
                     'screen_name': tweet['user']['screen_name'],
                     'location': tweet['user']['location']
                 }
-                # Convierte el diccionario Python en una cadena JSON y la envía a Kinesis
+                # Convierte el diccionario Python en una cadena JSON
                 tweet_json = json.dumps(tweet_dict)
-                response = kinesis.put_record(StreamName=stream_name, Data=tweet_json, PartitionKey='default')
-                print(response)
+
+                # Conecta a Kinesis y envía el tweet
+                kinesis = boto3.client('kinesis', region_name=region_name)
+                kinesis.put_record(
+                    StreamName=stream_name,
+                    Data=tweet_json,
+                    PartitionKey=partition_key
+                )
         except Exception as e:
             print(e)
 
